@@ -6,16 +6,102 @@ window.onload = function () {
   canvas.width = map.width;
   canvas.height = map.height;
 
-  const ciotti = new Image();
-  ciotti.src = "./ciotti.png";
+  const ciottiImg = new Image();
+  ciottiImg.src = "./ciotti.png";
 
-  const projectiles = [];
+  const wauquiezImg = new Image();
+  wauquiezImg.src = "./wauquiez.png";
 
-  ciotti.onload = function () {
-    ctx.drawImage(ciotti, 750, 950, 64, 64);
+  const ciotti = {
+    x: 750,
+    y: 950,
+    width: 64,
+    height: 64,
+    image: ciottiImg,
   };
 
-  // Function to shoot projectiles
+  let projectiles = [];
+  let enemies = [];
+
+  ciottiImg.onload = function () {
+    ctx.drawImage(
+      ciottiImg,
+      ciotti.x - ciotti.width / 2,
+      ciotti.y - ciotti.height / 2,
+      ciotti.width,
+      ciotti.height,
+    );
+  };
+
+  wauquiezImg.onerror = function () {
+    console.error("Failed to load the enemy image.");
+  };
+
+  function createEnemy() {
+    const enemySize = 64; // This might be adjusted based on the image size
+    let enemyX, enemyY;
+
+    // Spawn the enemy at a random edge of the canvas
+    if (Math.random() < 0.5) {
+      enemyX = 100; //Math.random() < 0.5 ? 0 - enemySize : canvas.width + enemySize;
+      enemyY = 100; //Math.random() * canvas.height;
+    } else {
+      enemyX = 800; //Math.random() * canvas.width;
+      enemyY = 100; //Math.random() < 0.5 ? 0 - enemySize : canvas.height + enemySize;
+    }
+
+    const angle = Math.atan2(ciotti.y - enemyY, ciotti.x - enemyX);
+    const speed = 2; // Adjust speed as necessary
+
+    return {
+      x: enemyX,
+      y: enemyY,
+      size: enemySize,
+      velocity: {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      },
+      image: wauquiezImg,
+    };
+  }
+
+  function drawEnemies() {
+    enemies.forEach((enemy) => {
+      ctx.drawImage(
+        enemy.image,
+        enemy.x - enemy.size / 2,
+        enemy.y - enemy.size / 2,
+        enemy.size,
+        enemy.size,
+      );
+    });
+  }
+
+  function updateEnemies(enemiesToRemove) {
+    enemies.forEach((enemy, index) => {
+      enemy.x += enemy.velocity.x;
+      enemy.y += enemy.velocity.y;
+
+      // Remove enemies that are too far off-screen
+      if (
+        enemy.x <= -50 ||
+        enemy.x >= canvas.width + 50 ||
+        enemy.y <= -50 ||
+        enemy.y >= canvas.height + 50
+      ) {
+        enemiesToRemove.add(index);
+      }
+    });
+  }
+
+  function checkCollision(projectile, enemy) {
+    const xDist = projectile.x - enemy.x;
+    const yDist = projectile.y - enemy.y;
+    const distance = Math.sqrt(xDist * xDist + yDist * yDist);
+    return distance < projectile.radius + enemy.size / 2;
+  }
+
+  //#region Projectiles
   function shootProjectile(mouseX, mouseY) {
     const angle = Math.atan2(
       mouseY - 950 /*character.y*/,
@@ -35,6 +121,7 @@ window.onload = function () {
     };
     projectiles.push(projectile);
   }
+
   function drawProjectiles() {
     projectiles.forEach((projectile) => {
       ctx.fillStyle = projectile.color;
@@ -51,7 +138,7 @@ window.onload = function () {
     });
   }
 
-  function updateProjectiles() {
+  function updateProjectiles(projectilesToRemove) {
     projectiles.forEach((projectile, index) => {
       projectile.x += projectile.velocity.x;
       projectile.y += projectile.velocity.y;
@@ -63,17 +150,62 @@ window.onload = function () {
         projectile.y + projectile.radius < 0 ||
         projectile.y - projectile.radius > canvas.height
       ) {
-        projectiles.splice(index, 1);
+        projectilesToRemove.add(index);
       }
     });
+  }
+  //#endregion
+
+  function updateGame() {
+    // Update projectiles
+    const projectilesToRemove = new Set();
+    const enemiesToRemove = new Set();
+
+    updateProjectiles(projectilesToRemove);
+    updateEnemies(enemiesToRemove);
+
+    // Check for collisions with enemies
+    projectiles.forEach((projectile, pIndex) => {
+      enemies.forEach((enemy, eIndex) => {
+        if (checkCollision(projectile, enemy)) {
+          projectilesToRemove.add(pIndex);
+          enemiesToRemove.add(eIndex);
+        }
+      });
+    });
+
+    // Remove projectiles and enemies that were marked for removal
+    projectiles = projectiles.filter(
+      (_, index) => !projectilesToRemove.has(index),
+    );
+    enemies = enemies.filter((_, index) => !enemiesToRemove.has(index));
   }
 
   // Game loop
   function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(ciotti, 750, 950, 64, 64);
-    updateProjectiles();
+
+    if (Math.random() < 0.01) {
+      // Adjust spawn rate as needed
+      enemies.push(createEnemy());
+    }
+    console.log(enemies.length);
+
+    //updateEnemies();
+
+    ctx.drawImage(
+      ciottiImg,
+      ciotti.x - ciotti.width / 2,
+      ciotti.y - ciotti.height / 2,
+      ciotti.width,
+      ciotti.height,
+    );
+
+    //updateProjectiles();
+
+    updateGame();
     drawProjectiles();
+    drawEnemies();
     requestAnimationFrame(gameLoop);
   }
 
