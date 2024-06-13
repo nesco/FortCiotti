@@ -1,4 +1,12 @@
 window.onload = function () {
+  function startGame() {
+    gameOver = false; // Reset game over flag
+    enemies = []; // Clear enemies
+    projectiles = []; // Clear projectiles
+    //initializeCharacter(); // Reset or initialize the character
+    gameLoop(); // Start the game loop
+  }
+
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   const map = document.getElementById("mapImage");
@@ -7,34 +15,45 @@ window.onload = function () {
   canvas.height = map.height;
 
   const ciottiImg = new Image();
-  ciottiImg.src = "./ciotti.png";
+  ciottiImg.src = "ciotti.png";
 
-  const wauquiezImg = new Image();
-  wauquiezImg.src = "./wauquiez.png";
+  let enemyImages = [];
+  const enemyImageSources = [
+    "wauquiez.png",
+    "pecresse.png",
+    "bellamy.png",
+    "larcher.png",
+  ];
+
+  function loadEnemyImages() {
+    enemyImageSources.forEach((src) => {
+      let img = new Image();
+      img.src = src;
+      enemyImages.push(img);
+    });
+  }
+  loadEnemyImages();
 
   const ciotti = {
     x: 750,
     y: 950,
-    width: 64,
-    height: 64,
+    size: 64,
     image: ciottiImg,
   };
 
   let projectiles = [];
   let enemies = [];
 
+  let gameOver = false;
+
   ciottiImg.onload = function () {
     ctx.drawImage(
       ciottiImg,
-      ciotti.x - ciotti.width / 2,
-      ciotti.y - ciotti.height / 2,
-      ciotti.width,
-      ciotti.height,
+      ciotti.x - ciotti.size / 2,
+      ciotti.y - ciotti.size / 2,
+      ciotti.size,
+      ciotti.size,
     );
-  };
-
-  wauquiezImg.onerror = function () {
-    console.error("Failed to load the enemy image.");
   };
 
   function createEnemy() {
@@ -42,16 +61,15 @@ window.onload = function () {
     let enemyX, enemyY;
 
     // Spawn the enemy at a random edge of the canvas
-    if (Math.random() < 0.5) {
-      enemyX = 100; //Math.random() < 0.5 ? 0 - enemySize : canvas.width + enemySize;
-      enemyY = 100; //Math.random() * canvas.height;
-    } else {
-      enemyX = 800; //Math.random() * canvas.width;
-      enemyY = 100; //Math.random() < 0.5 ? 0 - enemySize : canvas.height + enemySize;
-    }
+    enemyX = Math.random() * canvas.width;
+    enemyY = 100;
 
     const angle = Math.atan2(ciotti.y - enemyY, ciotti.x - enemyX);
     const speed = 2; // Adjust speed as necessary
+
+    // Randomly select an image for the enemy
+    const imageIndex = Math.floor(Math.random() * enemyImages.length);
+    const enemyImage = enemyImages[imageIndex];
 
     return {
       x: enemyX,
@@ -61,7 +79,7 @@ window.onload = function () {
         x: Math.cos(angle) * speed,
         y: Math.sin(angle) * speed,
       },
-      image: wauquiezImg,
+      image: enemyImage,
     };
   }
 
@@ -94,11 +112,11 @@ window.onload = function () {
     });
   }
 
-  function checkCollision(projectile, enemy) {
-    const xDist = projectile.x - enemy.x;
-    const yDist = projectile.y - enemy.y;
+  function checkCollision(entity1, entity2) {
+    const xDist = entity1.x - entity2.x;
+    const yDist = entity1.y - entity2.y;
     const distance = Math.sqrt(xDist * xDist + yDist * yDist);
-    return distance < projectile.radius + enemy.size / 2;
+    return distance < entity1.size / 2 + entity2.size / 2;
   }
 
   //#region Projectiles
@@ -113,9 +131,9 @@ window.onload = function () {
       y: Math.sin(angle) * speed,
     };
     const projectile = {
-      x: 750, //character.x,
-      y: 950, //character.y,
-      radius: 5,
+      x: ciotti.x, //character.x,
+      y: ciotti.y, //character.y,
+      size: 10, //radius*2
       color: "red",
       velocity,
     };
@@ -129,7 +147,7 @@ window.onload = function () {
       ctx.arc(
         projectile.x,
         projectile.y,
-        projectile.radius,
+        projectile.size / 2,
         0,
         Math.PI * 2,
         true,
@@ -156,6 +174,43 @@ window.onload = function () {
   }
   //#endregion
 
+  function endGame() {
+    // Stop the animation/game loop by not calling requestAnimationFrame
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)"; // Semi-transparent black overlay
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Game Over Text
+    ctx.fillStyle = "white"; // White text color
+    ctx.font = "48px serif"; // Font size and family
+    ctx.textAlign = "center"; // Center the text horizontally
+    ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2 - 20); // Positioning the text
+
+    // Click to Restart Text
+    ctx.font = "24px serif"; // Smaller font size for the restart prompt
+    ctx.fillText("Click to Restart", canvas.width / 2, canvas.height / 2 + 40);
+
+    // Add click event listener to the canvas to handle restart
+    canvas.addEventListener("click", restartGame, { once: true });
+  }
+
+  function restartGame() {
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Reset game state
+    gameOver = false;
+    enemies = []; // Reset enemies array
+    projectiles = []; // Reset projectiles array
+    ciotti.x = 750; // Optionally reset the character's position
+    ciotti.y = 950;
+
+    // Remove any event listeners if necessary (handled by 'once', but here for completeness)
+    canvas.removeEventListener("click", restartGame);
+
+    // Restart the game loop
+    gameLoop();
+  }
+
   function updateGame() {
     // Update projectiles
     const projectilesToRemove = new Set();
@@ -174,39 +229,52 @@ window.onload = function () {
       });
     });
 
+    // Check for collisions between the main character and enemies
+    enemies.forEach((enemy) => {
+      if (checkCollision(ciotti, enemy)) {
+        gameOver = true;
+      }
+    });
+
     // Remove projectiles and enemies that were marked for removal
     projectiles = projectiles.filter(
       (_, index) => !projectilesToRemove.has(index),
     );
     enemies = enemies.filter((_, index) => !enemiesToRemove.has(index));
+
+    if (gameOver) {
+      endGame();
+    }
   }
 
   // Game loop
   function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!gameOver) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (Math.random() < 0.01) {
-      // Adjust spawn rate as needed
-      enemies.push(createEnemy());
+      if (Math.random() < 0.01) {
+        // Adjust spawn rate as needed
+        enemies.push(createEnemy());
+      }
+      console.log(enemies.length);
+
+      //updateEnemies();
+
+      ctx.drawImage(
+        ciottiImg,
+        ciotti.x - ciotti.size / 2,
+        ciotti.y - ciotti.size / 2,
+        ciotti.size,
+        ciotti.size,
+      );
+
+      //updateProjectiles();
+
+      updateGame();
+      drawProjectiles();
+      drawEnemies();
+      requestAnimationFrame(gameLoop);
     }
-    console.log(enemies.length);
-
-    //updateEnemies();
-
-    ctx.drawImage(
-      ciottiImg,
-      ciotti.x - ciotti.width / 2,
-      ciotti.y - ciotti.height / 2,
-      ciotti.width,
-      ciotti.height,
-    );
-
-    //updateProjectiles();
-
-    updateGame();
-    drawProjectiles();
-    drawEnemies();
-    requestAnimationFrame(gameLoop);
   }
 
   canvas.addEventListener("mousedown", function (event) {
@@ -217,5 +285,5 @@ window.onload = function () {
   });
 
   // Start the game loop
-  gameLoop();
+  startGame();
 };
